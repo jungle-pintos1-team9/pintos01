@@ -86,7 +86,7 @@ test_sleep (int thread_cnt, int iterations)
       
       t->test = &test;
       t->id = i;
-      t->duration = (i + 1) * 10;
+      t->duration = (i + 1) * 10; // 해당 스레드가 sleep하는 시간
       t->iterations = 0;
 
       snprintf (name, sizeof name, "thread %d", i);

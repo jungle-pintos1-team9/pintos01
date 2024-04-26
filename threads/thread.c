@@ -27,6 +27,7 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+static struct list sleep_list; // sleep list 생성 (sleep queue)
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -48,6 +49,7 @@ static long long user_ticks;    /* # of timer ticks in user programs. */
 /* Scheduling. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
+static long long min_wake_tick; /* # 가장 짧은 wake tick 저장 */
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -108,6 +110,7 @@ thread_init (void) {
 	/* Init the globla thread context */
 	lock_init (&tid_lock);
 	list_init (&ready_list);
+	list_init (&sleep_list);
 	list_init (&destruction_req);
 
 	/* Set up a thread structure for the running thread. */
@@ -127,7 +130,7 @@ thread_start (void) {
 	thread_create ("idle", PRI_MIN, idle, &idle_started);
 
 	/* Start preemptive thread scheduling. */
-	intr_enable ();
+	intr_enable (); // 동시성을 위해 인터럽트 활성화
 
 	/* Wait for the idle thread to initialize idle_thread. */
 	sema_down (&idle_started);
@@ -195,7 +198,7 @@ thread_create (const char *name, int priority,
 
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
-	t->tf.rip = (uintptr_t) kernel_thread;
+	t->tf.rip = (uintptr_t) kernel_thread; // 현재 실행 중인 명령어의 주소. 다음에 실행될 명령어의 주소
 	t->tf.R.rdi = (uint64_t) function;
 	t->tf.R.rsi = (uint64_t) aux;
 	t->tf.ds = SEL_KDSEG;
@@ -308,6 +311,53 @@ thread_yield (void) {
 	intr_set_level (old_level);
 }
 
+/* Sleep & Wake up  */
+void thread_sleep (int64_t ticks) {
+	struct thread *curr = thread_current(); 
+	enum intr_level old_level;
+
+	// ASSERT (!intr_context ()); 
+	
+	old_level = intr_disable ();
+	if (curr != idle_thread) { // idle의 sleep 요청은 무시
+		curr->status = THREAD_BLOCKED; // 현재 상태 blocked
+		curr->wake_up_tick = ticks;	   // 깨어나야 하는 시간 설정
+		list_push_front(&sleep_list, &curr->elem); // sleep list에 추가
+		update_min_awake_tick(ticks);
+	}
+	schedule();
+	intr_set_level (old_level);
+}
+
+void thread_awake (int64_t ticks) {
+	// sleep list 순회
+	struct list_elem *elem;
+	long long new_min_awake_tick = INT64_MAX;
+
+	for (elem = list_begin(&sleep_list); elem != list_end(&sleep_list); elem = list_next(elem)) {
+		struct thread *find_thread = list_entry (elem, struct thread, elem);
+		if (find_thread->wake_up_tick <= ticks) {
+			list_remove(&find_thread->elem); 	  // sleep list에서 빼기
+			thread_unblock(find_thread);
+		}
+		else {
+			// global min tick 갱신
+			if (new_min_awake_tick > find_thread->wake_up_tick)
+				new_min_awake_tick = find_thread->wake_up_tick;
+		}
+	}
+	min_wake_tick = new_min_awake_tick;
+}
+
+/* global awake tick 재설정 */
+void update_min_awake_tick (int64_t ticks) {
+	min_wake_tick = ticks < min_wake_tick ? ticks : min_wake_tick;
+}
+
+int64_t get_min_awake_tick (void) {
+	return min_wake_tick;
+}
+
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
@@ -406,7 +456,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	memset (t, 0, sizeof *t);
 	t->status = THREAD_BLOCKED;
 	strlcpy (t->name, name, sizeof t->name);
-	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
+	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *); // 스택 포인터 설정
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
 }
