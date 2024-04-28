@@ -135,10 +135,15 @@ const char *thread_name (void);
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
 
+/* Updated */
 void thread_sleep (int64_t ticks); /* 재우기 */
 void thread_awake (int64_t ticks); /* 꺠우기 */
-void update_min_awake_tick (int64_t ticks); /* 제일 빨리 일어날 수 있는 스레드 */
+void update_min_awake_tick (); /* update global tick */
 int64_t get_min_awake_tick (void); 
+
+bool cmp_priority (const struct list_elem* a_, const struct list_elem* b_, void* aux UNUSED);
+bool cmp_awake_tick (const struct list_elem* a_, const struct list_elem* b_, void* aux UNUSED);
+/* -- updated */
 
 int thread_get_priority (void);
 void thread_set_priority (int);

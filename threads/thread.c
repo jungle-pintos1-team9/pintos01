@@ -49,7 +49,7 @@ static long long user_ticks;    /* # of timer ticks in user programs. */
 /* Scheduling. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
-static long long min_wake_tick; /* # 가장 짧은 wake tick 저장 */
+static int64_t min_awake_tick; /* # 가장 짧은 wake tick 저장 */
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -243,9 +243,18 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+
+	/* Put into ready_list by priority desc order and set status to READY  */
+	list_insert_ordered(&ready_list, &t->elem, cmp_priority, NULL);
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
+
+	/* Preemption: ready_list에 넣으려고 하는 thread의 priority가 높으면 CPU 뺐기 */
+	struct thread *curr = thread_current(); 
+	if( t->priority > curr->priority) {
+		thread_yield();
+	}
+
 }
 
 /* Returns the name of the running thread. */
@@ -306,56 +315,65 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
+		list_insert_ordered(&ready_list, &t->elem, cmp_priority, NULL); // 현재 실행중인 thread ready_list에 넣어줌
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
 
+// is larger priority in list_elem struct thread
+bool cmp_priority (const struct list_elem* a_, 
+				   const struct list_elem* b_, void* aux UNUSED){
+    struct thread *thread_a = list_entry(a_, struct thread, elem);
+    struct thread *thread_b = list_entry(b_, struct thread, elem);
+    
+    return thread_a->priority > thread_b->priority;
+}
+
+// is less wake_up_tick in list_elem struct thread
+bool cmp_awake_tick (const struct list_elem* a_, 
+					 const struct list_elem* b_, void* aux UNUSED){
+    struct thread *thread_a = list_entry(a_, struct thread, elem);
+    struct thread *thread_b = list_entry(b_, struct thread, elem);
+    
+    return thread_a->wake_up_tick < thread_b->wake_up_tick;
+}
+
+
 /* Sleep & Wake up  */
 void thread_sleep (int64_t ticks) {
+	if (ticks<=0){ // tick에 0보다 작거나 같은 값이 들어오면 sleep할 필요가 없으므로 바로 리턴
+		return;
+	}
 	struct thread *curr = thread_current(); 
 	enum intr_level old_level;
-
-	// ASSERT (!intr_context ()); 
-	
+	ASSERT (!intr_context ());
 	old_level = intr_disable ();
 	if (curr != idle_thread) { // idle의 sleep 요청은 무시
-		curr->status = THREAD_BLOCKED; // 현재 상태 blocked
 		curr->wake_up_tick = ticks;	   // 깨어나야 하는 시간 설정
-		list_push_front(&sleep_list, &curr->elem); // sleep list에 추가
-		update_min_awake_tick(ticks);
+		list_insert_ordered(&sleep_list, &curr->elem, cmp_awake_tick, NULL); // sleep list에 추가 -> awake tick 오름차순으로 정렬
+		thread_block();
+		update_min_awake_tick();
 	}
-	schedule();
 	intr_set_level (old_level);
 }
 
 void thread_awake (int64_t ticks) {
-	// sleep list 순회
-	struct list_elem *elem;
-	long long new_min_awake_tick = INT64_MAX;
-
-	for (elem = list_begin(&sleep_list); elem != list_end(&sleep_list); elem = list_next(elem)) {
-		struct thread *find_thread = list_entry (elem, struct thread, elem);
-		if (find_thread->wake_up_tick <= ticks) {
-			list_remove(&find_thread->elem); 	  // sleep list에서 빼기
-			thread_unblock(find_thread);
-		}
-		else {
-			// global min tick 갱신
-			if (new_min_awake_tick > find_thread->wake_up_tick)
-				new_min_awake_tick = find_thread->wake_up_tick;
-		}
+	struct thread *wakeup_thread = list_entry (list_begin(&sleep_list), struct thread, elem);
+	if (wakeup_thread->wake_up_tick <= ticks) {
+		list_remove(&wakeup_thread->elem); 	  // sleep list에서 빼기
+		thread_unblock(wakeup_thread);
+		update_min_awake_tick();
 	}
-	min_wake_tick = new_min_awake_tick;
 }
 
 /* global awake tick 재설정 */
-void update_min_awake_tick (int64_t ticks) {
-	min_wake_tick = ticks < min_wake_tick ? ticks : min_wake_tick;
+void update_min_awake_tick () {
+	struct thread *next_to_awake = list_entry(list_begin(&sleep_list),struct thread,elem); 
+	min_awake_tick = next_to_awake->wake_up_tick; 
 }
 
 int64_t get_min_awake_tick (void) {
-	return min_wake_tick;
+	return min_awake_tick;
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
