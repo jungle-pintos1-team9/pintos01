@@ -184,7 +184,7 @@ process_exec (void *f_name) {
 	if (!success)
 		return -1;
 
-	/* Start switched process. */
+	/* Start switched process. */ 
 	do_iret (&_if);
 	NOT_REACHED ();
 }
@@ -204,6 +204,10 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	while(true){
+		;
+	}
+	// thread_sleep(100);
 	return -1;
 }
 
@@ -335,10 +339,23 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	process_activate (thread_current ());
 
+    /* argument parsing */
+    char* save_ptr, *argv[64], *token; // command line input restricted to 128 bytes in pintos
+	token = strtok_r(file_name, " ", &save_ptr);
+	int argc = 0;
+	
+    while (token != NULL){
+        argv[argc++] = token;
+		token = strtok_r(NULL, " ", &save_ptr);
+		// printf("argv[%d]: %s\n", argc - 1, argv[argc - 1]);
+	}
+
+	char* path_name = argv[0];
+
 	/* Open executable file. */
-	file = filesys_open (file_name);
+	file = filesys_open (path_name);
 	if (file == NULL) {
-		printf ("load: %s: open failed\n", file_name);
+		printf ("load: %s: open failed\n", path_name);
 		goto done;
 	}
 
@@ -350,7 +367,7 @@ load (const char *file_name, struct intr_frame *if_) {
 			|| ehdr.e_version != 1
 			|| ehdr.e_phentsize != sizeof (struct Phdr)
 			|| ehdr.e_phnum > 1024) {
-		printf ("load: %s: error loading executable\n", file_name);
+		printf ("load: %s: error loading executable\n", path_name);
 		goto done;
 	}
 
@@ -408,14 +425,48 @@ load (const char *file_name, struct intr_frame *if_) {
 	}
 
 	/* Set up stack. */
-	if (!setup_stack (if_))
+	if (!setup_stack (if_)) //set rsp: stack top
 		goto done;
 
 	/* Start address. */
-	if_->rip = ehdr.e_entry;
+	if_->rip = ehdr.e_entry; //rip: instruction pointer
 
-	/* TODO: Your code goes here.
-	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+	/* --- Put into stack --- */
+	// stack grows downwards
+	for (int i= argc-1;i>=0;i--){
+		int N = strlen(argv[i])+1; // 
+		if_->rsp -= N; // move stack pointer
+		memcpy(if_->rsp, argv[i], N); // put in values(str)
+		argv[i] = &(if_->rsp);   // - ??
+	}
+	// align
+	int padding = if_->rsp %8;
+	if(padding){
+		if_->rsp -= padding;
+		memset(if_->rsp, 0, padding);
+	}
+
+	// for sentinel
+	if_->rsp -= 8;
+	memset(if_->rsp, 0, 8);
+
+	// put addrs
+	for (int i= argc-1;i>=0;i--){
+		if_->rsp -= 8;
+		memcpy(if_->rsp, argv[i], 8); 
+	}
+
+	// for fake return address
+	if_->rsp -= 8;
+	memset(if_->rsp, 0, 8);
+
+	// set rsi & rdi
+	if_->R.rsi = if_->rsp + 8; //source index (address of argv which is fake return addr + 8)
+	if_->R.rdi = argc; //destination index
+
+	/* --- Put into stack --- */
+
+	hex_dump(if_->rsp, if_->rsp, USER_STACK-if_->rsp, true);
 
 	success = true;
 
