@@ -27,6 +27,8 @@ static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
 
+void put_args_to_stack(char *argv,int argc ,struct intr_frame *if_);
+
 /* General process initializer for initd and other process. */
 static void
 process_init (void) {
@@ -50,8 +52,12 @@ process_create_initd (const char *file_name) {
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE);
 
+	char *save_ptr;
+	char *token;
+	token = strtok_r(file_name, " ", &save_ptr);
+
 	/* Create a new thread to execute FILE_NAME. */
-	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
+	tid = thread_create (token, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
@@ -176,11 +182,69 @@ process_exec (void *f_name) {
 	/* We first kill the current context */
 	process_cleanup ();
 
+    /* argument parsing */
+    char* save_ptr, *argv[64], *token; // command line input restricted to 128 bytes in pintos
+	token = strtok_r(file_name, " ", &save_ptr);
+	int argc = 0;
+	
+    while (token != NULL){
+        argv[argc++] = token;
+		token = strtok_r(NULL, " ", &save_ptr);
+		// printf("argv[%d]: %s\n", argc - 1, argv[argc - 1]);
+	}
+
+	char* path_name = argv[0];
+
 	/* And then load the binary */
-	success = load (file_name, &_if);
+	success = load (path_name, &_if);
+
+	/* put args into stack */
+	// put_args_to_stack(&argv, argc, &_if);
+	void* temp_addr[argc];
+	for (int i = argc-1; i >= 0; i--) {
+		int N = strlen(argv[i])+1; // argv length +1(for\0)
+		_if.rsp -= N; // move stack pointer
+		
+		memcpy(_if.rsp, argv[i], N); // put in values(str)
+		// printf("1 %x\n", _if.rsp);
+		// printf("2 %s\n", argv[i]);
+		temp_addr[i] = _if.rsp;
+		// printf("3 %x\n", temp_addr[i]);
+	}
+	// align
+	// int padding = 0;
+	// if (padding) {
+	// 	_if.rsp -= padding;
+	// 	memset(_if.rsp, 0, padding);
+	// }
+	_if.rsp -= (_if.rsp % 8);
+	// if (_if.rsp % 8 != 0) {
+		// *((uint8_t *)(_if.rsp)) = 0; 
+	// }
+
+	// for sentinel
+	_if.rsp -= 8;
+	memset(_if.rsp, 0, 8);
+
+	// put addr: back trace
+	for (int i = argc-1; i > -1; i--) {
+		_if.rsp -= 8;
+		// printf("4 %x\n", temp_addr[i]);
+		// printf("rsp %x\n", _if.rsp);
+		// memcpy(_if.rsp, temp_addr[i], 8); 
+		*(uintptr_t *)_if.rsp = temp_addr[i];
+	}
+
+	// set rsi & rdi
+	_if.R.rdi = argc; //destination index (1st argument)
+	_if.R.rsi = _if.rsp; //source index (address of argv which is fake return addr + 8) (2nd argument)
+
+	// for fake return address
+	_if.rsp -= 8;
+	memset(_if.rsp, 0, 8);
 
 	/* If load failed, quit. */
-	palloc_free_page (file_name);
+	palloc_free_page (path_name);
 	if (!success)
 		return -1;
 
@@ -188,6 +252,105 @@ process_exec (void *f_name) {
 	do_iret (&_if);
 	NOT_REACHED ();
 }
+
+/* --- Put into stack: stack grows downwards --- */
+void put_args_to_stack(char *argv,int argc ,struct intr_frame *_if){
+	void* temp_addr[argc];
+	int total_len = 0;
+
+	for (int i = argc-1; i >= 0; i--) {
+		int N = strlen(argv[i])+1; // argv length +1(for\0)
+		total_len += N;
+		_if->rsp -= N; // move stack pointer
+		
+		memcpy(_if->rsp, argv[i], N); // put in values(str)
+		temp_addr[i] = _if->rsp;
+	}
+	// align
+	int padding = 0;
+	if (total_len % 8 != 0)
+		padding = ((total_len / 8) + 1) * 8;
+	if (padding) {
+		_if->rsp -= padding;
+		memset(_if->rsp, 0, padding);
+	}
+
+	// for sentinel
+	_if->rsp -= 8;
+	memset(_if->rsp, 0, 8);
+
+	// put addr: back trace
+	for (int i = argc-1; i > -1; i--) {
+		_if->rsp -= 8;
+		memcpy(_if->rsp, temp_addr[i], 8); 
+	}
+
+	// set rsi & rdi
+	_if->R.rdi = argc; //destination index (1st argument)
+	_if->R.rsi = temp_addr[0]; //source index (address of argv which is fake return addr + 8) (2nd argument)
+
+	// for fake return address
+	_if->rsp -= 8;
+	memset(_if->rsp, 0, 8);
+
+	// void* temp_addr[argc];
+	// // int arglen[argc];
+	// for (int i= argc-1;i>=0;i--){
+	// 	// printf("argv[%d]: %s", i, argv[i]);
+	// 	int N = strlen(argv[i])+1; // argv length +1(for\0)
+	// 	// for (int j=i+1; j<argc;j++){
+	// 	// 	if (arglen[j]){
+	// 	// 		arglen[j]+=N;
+	// 	// 	} else {
+	// 	// 		arglen[j]=N;
+	// 	// 	}
+	// 	// }
+	// 	if_->rsp -= N; // move stack pointer
+	// 	// printf("rsp: %p", if_->rsp);
+		
+	// 	memcpy(if_->rsp, argv[i], N); // put in values(str)
+	// 	temp_addr[i] = if_->rsp;
+	// 	// argv[i] =(char*) if_->rsp;   // change to addr
+	// 	// printf("rsp: %p", if_->rsp);
+	// 	// printf("  addr argv[%d]: %p\n", i, argv[i]);
+	// }
+	// // align
+	// int padding = if_->rsp %8;
+	// if(padding){
+	// 	if_->rsp -= padding;
+	// 	memset(if_->rsp, 0, padding);
+	// }
+
+	// // for sentinel
+	// if_->rsp -= 8;
+	// memset(if_->rsp, 0, 8);
+
+	// // put addr: back trace
+	
+	// for (int i= argc-1;i>0;i--){
+	// 	if_->rsp -= 8;
+	// 	// len=0;
+	// 	// if (i>0){
+	// 	// 	for (int j=0; j<i;j++){
+	// 	// 		len += strlen(argv[i])+1;
+	// 	// 	}
+	// 	// }
+	// 	memcpy(if_->rsp
+	// 			// , (void*)argv[i]
+	// 			// , rsp +(argc-i)*8 + len*1
+	// 			, temp_addr[i]
+	// 			, 8); 
+	// }
+
+	// // for fake return address
+	// if_->rsp -= 8;
+	// memset(if_->rsp, 0, 8);
+
+	// // set rsi & rdi
+	// if_->R.rsi = if_->rsp + 8; //source index (address of argv which is fake return addr + 8) (2nd argument)
+	// if_->R.rdi = argc; //destination index (1st argument)
+}
+
 
 
 /* Waits for thread TID to die and returns its exit status.  If
@@ -204,10 +367,11 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-	while(true){
-		;
-	}
-	// thread_sleep(100);
+	// while(true){
+	// 	;
+	// }
+	thread_sleep(1000);
+	// TODO: 자식 프로세스가 종료될 때까지 대기
 	return -1;
 }
 
@@ -339,23 +503,10 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	process_activate (thread_current ());
 
-    /* argument parsing */
-    char* save_ptr, *argv[64], *token; // command line input restricted to 128 bytes in pintos
-	token = strtok_r(file_name, " ", &save_ptr);
-	int argc = 0;
-	
-    while (token != NULL){
-        argv[argc++] = token;
-		token = strtok_r(NULL, " ", &save_ptr);
-		// printf("argv[%d]: %s\n", argc - 1, argv[argc - 1]);
-	}
-
-	char* path_name = argv[0];
-
 	/* Open executable file. */
-	file = filesys_open (path_name);
+	file = filesys_open (file_name);
 	if (file == NULL) {
-		printf ("load: %s: open failed\n", path_name);
+		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
 
@@ -367,7 +518,7 @@ load (const char *file_name, struct intr_frame *if_) {
 			|| ehdr.e_version != 1
 			|| ehdr.e_phentsize != sizeof (struct Phdr)
 			|| ehdr.e_phnum > 1024) {
-		printf ("load: %s: error loading executable\n", path_name);
+		printf ("load: %s: error loading executable\n", file_name);
 		goto done;
 	}
 
@@ -430,43 +581,6 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* Start address. */
 	if_->rip = ehdr.e_entry; //rip: instruction pointer
-
-	/* --- Put into stack --- */
-	// stack grows downwards
-	for (int i= argc-1;i>=0;i--){
-		int N = strlen(argv[i])+1; // 
-		if_->rsp -= N; // move stack pointer
-		memcpy(if_->rsp, argv[i], N); // put in values(str)
-		argv[i] = &(if_->rsp);   // - ??
-	}
-	// align
-	int padding = if_->rsp %8;
-	if(padding){
-		if_->rsp -= padding;
-		memset(if_->rsp, 0, padding);
-	}
-
-	// for sentinel
-	if_->rsp -= 8;
-	memset(if_->rsp, 0, 8);
-
-	// put addrs
-	for (int i= argc-1;i>=0;i--){
-		if_->rsp -= 8;
-		memcpy(if_->rsp, argv[i], 8); 
-	}
-
-	// for fake return address
-	if_->rsp -= 8;
-	memset(if_->rsp, 0, 8);
-
-	// set rsi & rdi
-	if_->R.rsi = if_->rsp + 8; //source index (address of argv which is fake return addr + 8)
-	if_->R.rdi = argc; //destination index
-
-	/* --- Put into stack --- */
-
-	hex_dump(if_->rsp, if_->rsp, USER_STACK-if_->rsp, true);
 
 	success = true;
 

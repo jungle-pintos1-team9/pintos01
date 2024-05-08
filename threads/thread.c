@@ -107,7 +107,7 @@ thread_init (void) {
 	};
 	lgdt (&gdt_ds);
 
-	/* Init the globla thread context */
+	/* Init the global thread context */
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&sleep_list);
@@ -198,14 +198,19 @@ thread_create (const char *name, int priority,
 
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
-	t->tf.rip = (uintptr_t) kernel_thread;
-	t->tf.R.rdi = (uint64_t) function;
-	t->tf.R.rsi = (uint64_t) aux;
+	t->tf.rip = (uintptr_t) kernel_thread; // instruction pointer -> kernel thread 부르니까..?
+	t->tf.R.rdi = (uint64_t) function; // function  argv 랑은 뭐가 다르지... 중간에 R이 들어가면 register인가....????
+	t->tf.R.rsi = (uint64_t) aux; // arguments  argc
 	t->tf.ds = SEL_KDSEG;
 	t->tf.es = SEL_KDSEG;
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
+
+	/* initialize fd_table */
+	for (int i=0;i<MAX_FILE;i++){
+		t->fd_table[i]=NULL; //0,1 reserved 어떻게 적용하지..??
+	}
 
 	/* Add to run queue. */
 	thread_unblock (t);

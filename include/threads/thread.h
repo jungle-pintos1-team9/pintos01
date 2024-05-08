@@ -5,6 +5,9 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/synch.h"
+#include "threads/vaddr.h"
+#include "filesys/file.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -27,6 +30,9 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+
+/* Define maxfiles to opne in a process */
+#define MAX_FILE 128 				/* fd_table size limit = ONE PAGE  what is pgsize & why divide by 8*/
 
 /* A kernel thread or user process.
  *
@@ -85,6 +91,12 @@ typedef int tid_t;
  * only because they are mutually exclusive: only a thread in the
  * ready state is on the run queue, whereas only a thread in the
  * blocked state is on a semaphore wait list. */
+
+// struct file_descriptor{
+// 	int fd; // fd index
+// 	struct file* file; //open file pointer
+// };
+
 struct thread {
 	/* Owned by thread.c. */
 	tid_t tid;                          /* Thread identifier. */
@@ -97,11 +109,26 @@ struct thread {
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
-	/* priority donation */
+	/* project1: priority donation */
 	int init_priority;
 	struct lock *wait_on_lock;		/* 현재 스레드가 기다리는 락 */
 	struct list donations;			/* 기부해준 스레드들을 담는 리스트 */
 	struct list_elem donation_elem;	/* thread 구조체 변환용 */
+
+	/* project2: process hierarchy */
+	// struct thread *parent; /* pointer to parent process */  //parent process descriptor???
+	// struct list child; /* pointer to child list */
+	// struct list_elem child_elem; /* siblings list elem */
+
+	//declare MAX_FILE
+
+	/* project2: file descriptor table */
+	// struct file_descriptor* fd_table[MAX_FILE]; //array containg file*
+	struct file *fd_table[MAX_FILE];
+	
+	// struct semaphore sema_exit;
+	// struct semaphore sema_load;
+	int exit_status; //exit 호출시 종료 status
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
