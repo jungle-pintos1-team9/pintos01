@@ -207,11 +207,6 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
-	/* initialize fd_table */
-	for (int i=0;i<MAX_FILE;i++){
-		t->fd_table[i]=NULL; //0,1 reserved 어떻게 적용하지..??
-	}
-
 	/* Add to run queue. */
 	thread_unblock (t);
 
@@ -398,12 +393,17 @@ void schedule_preemption(void) {
 	// struct thread *curr = running_thread();
 	struct thread *curr = thread_current();	
 	struct list_elem *max_priority = list_begin(&ready_list);
+	// enum intr_level old_level;
 
 	if (list_empty(&ready_list))
 		return;
+	
+	// old_level = intr_disable();
 
 	if (!intr_context() && !cmp_priority(&curr->elem, &max_priority, NULL)) 
 		thread_yield();
+	
+	// intr_set_level (old_level);
 }
 
 /* donations compare */
@@ -557,6 +557,14 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->init_priority = priority;
 	t->wait_on_lock = NULL;
 	list_init(&t->donations);
+
+    /* initialize fd_available bool */
+    list_init(&t->fd_table);
+    t->fd_available[0]=t->fd_available[1]=false;
+    for (int i=2;i<MAX_FILE;i++){
+        t->fd_available[i] = true;
+    }
+
 	t->magic = THREAD_MAGIC;
 }
 

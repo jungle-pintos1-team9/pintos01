@@ -384,6 +384,25 @@ process_exit (void) {
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
 
+//1번 free가 잘못됏다
+//2번 allocation이 애초에 잘못됏다...
+
+    struct list_elem *fd_elem;
+	// if exists open file(s)
+	if(!list_empty(&curr->fd_table)){
+		fd_elem=list_begin(&curr->fd_table);
+		//close files and free fd_table // TODO: close refactoring
+		while(fd_elem!=list_end(&curr->fd_table)){
+			struct file_descriptor *fd_entry = list_entry(fd_elem, struct file_descriptor, elem);
+			file_close(fd_entry->file);
+
+			struct list_elem *next_fd_elem = fd_elem->next;
+			list_remove(&fd_entry->elem);
+			free(fd_entry);
+			fd_elem = next_fd_elem;
+		}
+	}
+
 	process_cleanup ();
 }
 

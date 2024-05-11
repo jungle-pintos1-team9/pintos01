@@ -9,6 +9,7 @@
 #include "intrinsic.h"
 #include "threads/init.h"
 #include "filesys/filesys.h"
+#include "threads/palloc.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -22,8 +23,12 @@ void halt(void); //void shutdown_power_off(void)
 void exit(int status); //void thread_exit(void)
 bool create(const char *file, unsigned initial_size); // bool filesys_create(const char *name, off_t initial_size)
 bool remove(const char *file); // bool filesys_remove(const char *name)
-int open(const char *file); //return file descriptor to tread calling syscall
-void close (int fd);
+int open(const char *file); // open file and return file descriptor to tread calling syscall
+void close (int fd); // close associated file to the given fd
+
+
+
+
 
 /* System call.
  *
@@ -62,6 +67,8 @@ syscall_handler (struct intr_frame *f) {
 	//stack pointer가 유저영역인지 확인
 	// printf("systemcall!");
 	// printf("");
+	// struct threaed *curr = thread_current();
+
 	if (!check_address((f->rsp)))
 		thread_exit();
 	
@@ -84,6 +91,7 @@ syscall_handler (struct intr_frame *f) {
 		
 		case SYS_OPEN:
 			f->R.rax = open(f->R.rdi);
+			// printf("open result(fd): %d\n",f->R.rax);
 			break;
 		case SYS_CLOSE:
 			close(f->R.rdi);
@@ -102,74 +110,96 @@ syscall_handler (struct intr_frame *f) {
 
 
 
-
 void halt(void){
-	// printf("!!!halt!!!");
-	power_off();
+    // printf("!!!halt!!!");
+    power_off();
 }
 
 void exit(int status){ 
-	/* TODO: close open files -> after emplementing file table */
-
-
-	/* call thread_exit() function */
-	thread_current()->exit_status = status;
-	printf("%s: exit(%d)\n", thread_name(), status);
-	thread_exit();
+    thread_current()->exit_status = status;
+    printf("%s: exit(%d)\n", thread_name(), status);
+    thread_exit();
 }
 
 
-bool create(const char *file, unsigned initial_size){ // bool filesys_create(const char *name, off_t initial_size)
-	if (file && check_address(file)){
+bool create(const char *file, unsigned initial_size){  // bool filesys_create(const char *name, off_t initial_size)
+	if (file && check_address(file)){ //filename exists & in userland
 		return filesys_create(file, initial_size);
-	} else {
-		exit(-1);
-	}
+    }
+	// something wrong
+    exit(-1);
 }
 
 
 bool remove(const char *file){ // bool filesys_remove(const char *name)
-	if (file && check_address(file)){
-		return filesys_remove(file);
-	} else {
-		exit(-1);
-	}
+    if (file && check_address(file)){
+        return filesys_remove(file);
+    } else {
+        exit(-1);
+    }
 }
 
 int open (const char *file){ //returns fd or -1 if not successful
-	struct thread *curr = thread_current();
-	if (file && check_address(file)){
-		struct file *open_file;
-		if((open_file = filesys_open(*file))!=NULL){ ; // file pointer return. 배열의 빈자리에 *file 넣어주고 해당 index return실패시 -1
-			for (int i=2;i<MAX_FILE;i++){
-				if (curr->fd_table[i]==NULL)
-					curr->fd_table[i]=open_file;
-					return i;
-			}
-		} 
-		return -1;
-	} else {
-		exit(-1);
-	}
+    if (file && check_address(file)){
+        struct thread *curr = thread_current();
+        struct file *open_file;
+        // printf("---file: %s\n", file);
+
+        open_file = filesys_open(file); // file pointer return. 배열의 빈자리에 *file 넣어주고 해당 index return실패시 -1
+        if (open_file!=NULL){
+            // allocate fd
+            int fd=2;
+            while(!curr->fd_available[fd] && fd<MAX_FILE){
+                fd++;
+            }
+            if (fd==MAX_FILE){
+                return -1;
+            }
+            // create fd_elem
+            struct file_descriptor *fd_entry = (struct file_descriptor *)malloc(sizeof(struct file_descriptor));
+			// user satck???
+            fd_entry->fd = fd;
+            fd_entry->file = open_file;
+
+            curr->fd_available[fd]=false;
+            // put into fd_table
+            list_push_back(&curr->fd_table, &fd_entry->elem);
+            return fd;
+        } 
+        return -1; //open failed
+    } else { 
+        exit(-1); // call not valid
+    }
 
 }
 
 void close (int fd){
-	struct thread *curr = thread_current();
+    struct thread *curr = thread_current();
 
-	if (!fd || fd<2 || fd>MAX_FILE ){ //check fd range
-		exit(-1);
-	}
+    if (fd>1 && fd<MAX_FILE){
 
-	struct file* closefile=curr->fd_table[fd];
+		// search through open file(s)
+		struct list_elem *fd_elem;
+		if(!list_empty(&curr->fd_table)){
+			fd_elem=list_begin(&curr->fd_table);
+			//close files and free fd_table // TODO: close refactoring
+			while(fd_elem!=list_end(&curr->fd_table)){
+				struct file_descriptor *fd_entry = list_entry(fd_elem, struct file_descriptor, elem);
+				if (fd_entry->file==fd){
+					file_close(fd_entry->file);
+				}
+				struct list_elem *next_fd_elem = fd_elem->next;
+				list_remove(&fd_entry->elem);
+				free(fd_entry);
+				fd_elem = next_fd_elem;
+				break;
+			}
+		}
 
-	if (closefile){
-		file_close(closefile);
-		curr->fd_table[fd]=NULL;
-	} else {
-		exit(-1);
-	}
+    }
+    return;
 }
+
 
 
 

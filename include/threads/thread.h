@@ -12,6 +12,14 @@
 #include "vm/vm.h"
 #endif
 
+/* struct file descriptor */
+struct file_descriptor{
+    int fd;
+    struct file* file;
+    struct list_elem elem;
+};
+
+
 
 /* States in a thread's life cycle. */
 enum thread_status {
@@ -123,9 +131,10 @@ struct thread {
 	//declare MAX_FILE
 
 	/* project2: file descriptor table */
-	// struct file_descriptor* fd_table[MAX_FILE]; //array containg file*
-	struct file *fd_table[MAX_FILE];
-	
+    // struct file_descriptor* fd_table[MAX_FILE]; //array containg file*
+    struct list fd_table;
+    bool fd_available[MAX_FILE]; 
+
 	// struct semaphore sema_exit;
 	// struct semaphore sema_load;
 	int exit_status; //exit 호출시 종료 status
