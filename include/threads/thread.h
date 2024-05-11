@@ -124,24 +124,28 @@ struct thread {
 	struct list_elem donation_elem;	/* thread 구조체 변환용 */
 
 	/* project2: process hierarchy */
-	// struct thread *parent; /* pointer to parent process */  //parent process descriptor???
-	// struct list child; /* pointer to child list */
-	// struct list_elem child_elem; /* siblings list elem */
-
-	//declare MAX_FILE
+	struct thread *parent; /* pointer to parent process */  //parent process descriptor???
+	struct list child_list; /* pointer to child list */
+	struct list_elem child_elem; /* siblings list elem */
 
 	/* project2: file descriptor table */
     // struct file_descriptor* fd_table[MAX_FILE]; //array containg file*
     struct list fd_table;
-    bool fd_available[MAX_FILE]; 
+	int next_fd; //fd to assign
+    // bool fd_available[MAX_FILE]; 
 
-	// struct semaphore sema_exit;
-	// struct semaphore sema_load;
+	struct semaphore sema_exit;
+	struct semaphore sema_load;
 	int exit_status; //exit 호출시 종료 status
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
+
+
+
+
+
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
