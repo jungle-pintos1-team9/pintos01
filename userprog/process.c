@@ -82,8 +82,21 @@ initd (void *f_name) {
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
-	return thread_create (name,
+	tid_t child_tid = thread_create (name,
 			PRI_DEFAULT, __do_fork, thread_current ());
+
+	// search for child and sema down(sema_load)
+	struct list_elem *search_child = list_begin(&thread_current()->child_list);
+	while(search_child){
+		struct thread *child_t = list_entry(search_child, struct thread, child_elem);
+		if (child_t->tid==child_tid){
+			sema_down(&child_t->sema_load);
+			break;
+		}
+		search_child = search_child->next;
+	}
+	return child_tid;
+
 }
 
 #ifndef VM
@@ -98,21 +111,28 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
+	if(is_kernel_vaddr(va))
+		return true;
 
 	/* 2. Resolve VA from the parent's page map level 4. */
 	parent_page = pml4_get_page (parent->pml4, va);
 
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
+	newpage = palloc_get_page(PAL_USER | PAL_ZERO); // why bitmasking?
 
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
+	memcpy(newpage, parent_page, PGSIZE);
+	writable = is_writable(pte);
 
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
 	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
 		/* 6. TODO: if fail to insert page, do error handling. */
+		palloc_free_page(newpage);
+		return false;
 	}
 	return true;
 }
@@ -125,12 +145,17 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 static void
 __do_fork (void *aux) {
 	struct intr_frame if_;
-	struct thread *parent = (struct thread *) aux;
-	struct thread *current = thread_current ();
+	struct thread *parent = (struct thread *) aux; // parent thread struct(caller)
+	struct thread *current = thread_current (); // callee
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
 	struct intr_frame *parent_if;
 	bool succ = true;
 
+	parent_if = &parent->parent_tf;
+	if (!parent_if){
+		succ = false;
+	}
+	
 	/* 1. Read the cpu context to local stack. */
 	memcpy (&if_, parent_if, sizeof (struct intr_frame));
 
@@ -155,6 +180,21 @@ __do_fork (void *aux) {
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
 
+
+	// copy fd_table & openfiles of parent
+	if(!list_empty(&parent->fd_table)){
+		struct list_elem *fd_elem = list_begin(&parent->fd_table);
+		while(fd_elem){
+			struct file_descriptor *p_fd_entry = list_entry(fd_elem, struct file_descriptor, elem);
+			struct file_descriptor *c_fd_entry = (struct file_descriptor*)malloc(sizeof(struct file_descriptor));
+			c_fd_entry->fd = p_fd_entry->fd;
+			c_fd_entry->file = file_duplicate(p_fd_entry->file);
+			list_push_back(&current->fd_table, &c_fd_entry->elem);
+			fd_elem = fd_elem -> next;	
+		}
+	}
+	if_.R.rax = 0;
+	sema_up(&current->sema_load); // notify that the loading is done
 	process_init ();
 
 	/* Finally, switch to the newly created process. */
@@ -293,62 +333,6 @@ void put_args_to_stack(char *argv,int argc ,struct intr_frame *_if){
 	_if->rsp -= 8;
 	memset(_if->rsp, 0, 8);
 
-	// void* temp_addr[argc];
-	// // int arglen[argc];
-	// for (int i= argc-1;i>=0;i--){
-	// 	// printf("argv[%d]: %s", i, argv[i]);
-	// 	int N = strlen(argv[i])+1; // argv length +1(for\0)
-	// 	// for (int j=i+1; j<argc;j++){
-	// 	// 	if (arglen[j]){
-	// 	// 		arglen[j]+=N;
-	// 	// 	} else {
-	// 	// 		arglen[j]=N;
-	// 	// 	}
-	// 	// }
-	// 	if_->rsp -= N; // move stack pointer
-	// 	// printf("rsp: %p", if_->rsp);
-		
-	// 	memcpy(if_->rsp, argv[i], N); // put in values(str)
-	// 	temp_addr[i] = if_->rsp;
-	// 	// argv[i] =(char*) if_->rsp;   // change to addr
-	// 	// printf("rsp: %p", if_->rsp);
-	// 	// printf("  addr argv[%d]: %p\n", i, argv[i]);
-	// }
-	// // align
-	// int padding = if_->rsp %8;
-	// if(padding){
-	// 	if_->rsp -= padding;
-	// 	memset(if_->rsp, 0, padding);
-	// }
-
-	// // for sentinel
-	// if_->rsp -= 8;
-	// memset(if_->rsp, 0, 8);
-
-	// // put addr: back trace
-	
-	// for (int i= argc-1;i>0;i--){
-	// 	if_->rsp -= 8;
-	// 	// len=0;
-	// 	// if (i>0){
-	// 	// 	for (int j=0; j<i;j++){
-	// 	// 		len += strlen(argv[i])+1;
-	// 	// 	}
-	// 	// }
-	// 	memcpy(if_->rsp
-	// 			// , (void*)argv[i]
-	// 			// , rsp +(argc-i)*8 + len*1
-	// 			, temp_addr[i]
-	// 			, 8); 
-	// }
-
-	// // for fake return address
-	// if_->rsp -= 8;
-	// memset(if_->rsp, 0, 8);
-
-	// // set rsi & rdi
-	// if_->R.rsi = if_->rsp + 8; //source index (address of argv which is fake return addr + 8) (2nd argument)
-	// if_->R.rdi = argc; //destination index (1st argument)
 }
 
 
@@ -363,16 +347,46 @@ void put_args_to_stack(char *argv,int argc ,struct intr_frame *_if){
  * This function will be implemented in problem 2-2.  For now, it
  * does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) {
+process_wait (tid_t child_tid) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-	// while(true){
-	// 	;
-	// }
-	thread_sleep(1000);
+
+	// search the descriptor of the child process by using child_tid
+	struct list_elem *child = list_begin(&thread_current()->child_list);
+	struct thread *child_t;
+	bool is_direct_child = false;
+	bool is_called = false;
+	int child_exit_status;
+	
+	while (child){
+		child_t = list_entry(child, struct thread, child_elem);
+		if (child_t->tid==child_tid){
+			is_direct_child = true;
+			break;
+		}
+		child = child->next;
+	}
+
+	if (!is_direct_child || child_t->wait_count>0) //if not direct child or called before
+		return -1;
+
+	child_t->wait_count++; //increment wait count
+	
+	//if exited deallocate the descriptor of child process
+	// 1. status 확인
+	sema_down(&child_t->sema_exit); // wait for child thread to exit
+	return child_t->exit_status;
+
+	// sema_up(&child_t->sema_wait);
+	// once child process exits, deallocate the descriptor of child process
+	// and return exit status of the child process
+
+	// return exit status of the child process
+
+
+	// thread_sleep(1000);
 	// TODO: 자식 프로세스가 종료될 때까지 대기
-	return -1;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -384,14 +398,10 @@ process_exit (void) {
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
 
-//1번 free가 잘못됏다
-//2번 allocation이 애초에 잘못됏다...
-
-    struct list_elem *fd_elem;
 	// if exists open file(s)
 	if(!list_empty(&curr->fd_table)){
-		fd_elem=list_begin(&curr->fd_table);
-		//close files and free fd_table // TODO: close refactoring
+		struct list_elem *fd_elem =list_begin(&curr->fd_table);
+		//close files and free fd_table
 		while(fd_elem!=list_end(&curr->fd_table)){
 			struct file_descriptor *fd_entry = list_entry(fd_elem, struct file_descriptor, elem);
 			file_close(fd_entry->file);
@@ -403,6 +413,7 @@ process_exit (void) {
 		}
 	}
 
+	sema_up(&curr->sema_exit); //signals that exit is called
 	process_cleanup ();
 }
 

@@ -207,6 +207,9 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
+	/* set child & parent relationship*/
+	list_push_back(&thread_current()->child_list, &t->child_elem);
+
 	/* Add to run queue. */
 	thread_unblock (t);
 
@@ -560,15 +563,14 @@ init_thread (struct thread *t, const char *name, int priority) {
 
     /* initialize fd_available bool */
     list_init(&t->fd_table);
-	t->next_fd = 2; //0, 1 reserved 
-    // t->fd_available[0]=t->fd_available[1]=false;
-    // for (int i=2;i<MAX_FILE;i++){
-    //     t->fd_available[i] = true;
-    // }
+	t->next_fd = 2; //0, 1 reserved
+	t->wait_count = 0; 
 
-	sema_init(&t->sema_load,1);
-	sema_init(&t->sema_exit,1);
-	/* initialize child_list */
+	sema_init(&t->sema_load,0); 
+	sema_init(&t->sema_exit,0);
+	// sema_init(&t->sema_wait,1);
+	
+	/* initialize siblings_list */
 	list_init(&t->child_list);
 
 	t->magic = THREAD_MAGIC;

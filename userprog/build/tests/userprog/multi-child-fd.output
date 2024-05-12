@@ -12,7 +12,7 @@ Kernel command line: -q -f put multi-child-fd put sample.txt put child-close run
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  34,355,200 loops/s.
+Calibrating timer...  32,716,800 loops/s.
 hd0: unexpected interrupt
 hd0:0: detected 329 sector (164 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
@@ -26,17 +26,15 @@ Putting 'child-close' into the file system...
 Executing 'multi-child-fd':
 (multi-child-fd) begin
 (multi-child-fd) open "sample.txt"
-(multi-child-fd) wait(exec()) = 4
-(multi-child-fd) size of sample.txt (8) differs from expected (373)
-(multi-child-fd) read of 373 bytes at offset 0 in "sample.txt" returned 9: FAILED
-multi-child-fd: exit(1)
-Execution of 'multi-child-fd' complete.
-Timer: 1004 ticks
-Thread: 911 idle ticks, 73 kernel ticks, 21 user ticks
+Kernel PANIC at ../../threads/mmu.c:235 in pml4_set_page(): assertion `pg_ofs (kpage) == 0' failed.
+Call stack: 0x8004218df4 0x800420d4cc 0x800421c9ec 0x800420cde2 0x800420ce98 0x800420cf41 0x800420cfdd 0x800421cac6 0x8004207a14.
+The `backtrace' program can make call stacks useful.
+Read "Backtraces" in the "Debugging Tools" chapter
+of the Pintos documentation for more information.
+Timer: 174 ticks
+Thread: 89 idle ticks, 70 kernel ticks, 15 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 154 reads, 554 writes
 hd1:0: 253 reads, 0 writes
-Console: 1257 characters output
-Keyboard: 0 keys pressed
-Exception: 0 page faults
-Powering off...
+Console: 1391 characters output
+Key

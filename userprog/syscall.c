@@ -10,6 +10,9 @@
 #include "threads/init.h"
 #include "filesys/filesys.h"
 #include "threads/palloc.h"
+#include "userprog/process.h"
+#include "threads/synch.h"
+
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -20,17 +23,23 @@ void get_argument(void *esp, int *arg, int count);
 struct list_elem* find_fd_elem(int fd); // returns corresponding fd_elem for the given fd
 
 /* syscall handler functions */
-void halt(void); //void shutdown_power_off(void)
-void exit(int status); //void thread_exit(void)
+void halt (void) NO_RETURN;
+void exit (int status) NO_RETURN;
+tid_t fork (const char *thread_name);
+int exec (const char *file);
+int wait (tid_t);
+bool create (const char *file, unsigned initial_size);
+bool remove (const char *file);
+int open (const char *file);
+int filesize (int fd);
+int read (int fd, void *buffer, unsigned length);
+int write (int fd, const void *buffer, unsigned length);
+void seek (int fd, unsigned position);
+unsigned tell (int fd);
+void close (int fd);
 
-// file system related functions
-bool create(const char *file, unsigned initial_size); // bool filesys_create(const char *name, off_t initial_size)
-bool remove(const char *file); // bool filesys_remove(const char *name)
-int open(const char *file); // open file and return file descriptor to tread calling syscall
-void close (int fd); // close associated file to the given fd
-int read (int fd, void *buffer, unsigned size);
-int write(int fd, void *buffer, unsigned size);
-int filesize(int fd);
+int dup2(int oldfd, int newfd);
+
 
 
 
@@ -71,23 +80,34 @@ syscall_init (void) {
 // save return value of system call at eax register
 void
 syscall_handler (struct intr_frame *f) {
-	//syscall: userlevel -> kernel level
-	//stack pointer가 유저영역인지 확인
-	// printf("systemcall!");
-	// printf("");
-	// struct threaed *curr = thread_current();
-
-	if (!check_address((f->rsp)))
+	//syscall: userlevel -> kernel level 
+	if (!check_address((f->rsp))) //stack pointer가 유저영역인지 확인
 		thread_exit();
-	
+
 	switch(f->R.rax) // R: general purpose register, userstack에 저장되어있는 시스템 콜 넘버
 	{
-		case SYS_HALT: //0
+		case SYS_HALT:
 			halt();
 			break;
-		case SYS_EXIT: //1
+		case SYS_EXIT:
 			exit((int)f->R.rdi);
-			thread_exit();
+			// thread_exit();
+			break;
+		case SYS_FORK:
+			memcpy(&thread_current()->parent_tf, f, sizeof(struct intr_frame));
+			f->R.rax = fork(f->R.rdi);
+			break;
+		case SYS_EXEC:
+			f->R.rax = exec(f->R.rdi);
+			break;
+		case SYS_WAIT:
+			f->R.rax = wait(f->R.rdi);
+			break;
+		case SYS_TELL:
+			// wait
+			break;
+		case SYS_SEEK:
+			// wait
 			break;
 
 		case SYS_CREATE:
@@ -96,27 +116,31 @@ syscall_handler (struct intr_frame *f) {
 		case SYS_REMOVE:
 			f->R.rax = remove(f->R.rdi);
 			break;
-		
+
 		case SYS_OPEN:
 			f->R.rax = open(f->R.rdi);
-			// printf("open result(fd): %d\n",f->R.rax);
+			break;
+		case SYS_FILESIZE:
+			f->R.rax = filesize(f->R.rdi);
 			break;
 		case SYS_CLOSE:
 			close(f->R.rdi);
 			break;
+		case SYS_READ:
+			f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
+			break;
 		case SYS_WRITE:
-			printf("%s", f->R.rsi);
+			f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
 			break;
-		case SYS_EXEC:
-			// exec();
-			break;
-		case SYS_WAIT:
-			break;
-
+		default:
+			thread_exit();
 	}
+	// printf("syscall returned successfully\n");
+	// printf("f.Rax %d\n",f->R.rax);
 }
 
 
+/* syscall functions definition */
 
 void halt(void){
     power_off();
@@ -132,7 +156,7 @@ bool create(const char *file, unsigned initial_size){  // bool filesys_create(co
 	if (file && check_address(file)){ //filename exists & in userland
 		return filesys_create(file, initial_size);
     }
-	// something wrong
+	//something wrong
     exit(-1);
 }
 
@@ -147,20 +171,14 @@ bool remove(const char *file){ // bool filesys_remove(const char *name)
 
 int open (const char *file){ //returns fd or -1 if not successful
     if (file && check_address(file)){
+
         struct thread *curr = thread_current();
         struct file *open_file;
         // printf("---file: %s\n", file);
 
+		lock_acquire(&filesys_lock);
         open_file = filesys_open(file); // file pointer return. 배열의 빈자리에 *file 넣어주고 해당 index return실패시 -1
         if (open_file!=NULL){
-            // // allocate fd
-            // int fd=2;
-            // while(!curr->fd_available[fd] && fd<MAX_FILE){
-            //     fd++;
-            // }
-            // if (fd==MAX_FILE){
-            //     return -1;
-            // }
 
             // create fd_elem
             struct file_descriptor *fd_entry = (struct file_descriptor *)malloc(sizeof(struct file_descriptor));
@@ -171,8 +189,10 @@ int open (const char *file){ //returns fd or -1 if not successful
             // curr->fd_available[fd]=false;
             // put into fd_table
             list_push_back(&curr->fd_table, &fd_entry->elem);
+			lock_release(&filesys_lock);
             return fd_entry->fd;
-        } 
+        }
+		lock_release(&filesys_lock);
         return -1; //open failed
     } else { 
         exit(-1); // call not valid
@@ -182,87 +202,148 @@ int open (const char *file){ //returns fd or -1 if not successful
 
 void close (int fd){
     if (fd>1 && fd<MAX_FILE){
+		lock_acquire(&filesys_lock);
 		struct list_elem *fd_elem =	find_fd_elem(fd);
 		if (fd_elem){
 			struct file_descriptor* fd_entry = list_entry(fd_elem, struct file_descriptor, elem);
 			file_close(fd_entry->file);
 			list_remove(&fd_entry->elem);
 			free(fd_entry);
-		}
-		// // search through open file(s)
-		// struct list_elem *fd_elem;
-		// if(!list_empty(&curr->fd_table)){
-		// 	fd_elem=list_begin(&curr->fd_table);
-		// 	//close files and free fd_table // TODO: close refactoring
-		// 	while(fd_elem!=list_end(&curr->fd_table)){
-		// 		struct file_descriptor *fd_entry = list_entry(fd_elem, struct file_descriptor, elem);
-		// 		if (fd_entry->file==fd){
-		// 			file_close(fd_entry->file);
-		// 		}
-		// 		struct list_elem *next_fd_elem = fd_elem->next;
-		// 		list_remove(&fd_entry->elem);
-		// 		free(fd_entry);
-		// 		fd_elem = next_fd_elem;
-		// 		break;
-		// 	}
-		// }
-    }
-    return;
-}
-
-
-
-//return fd_elem for the given fd (NULL if failed)
-struct list_elem* find_fd_elem(int fd){
-	struct thread *curr = thread_current();
-    if (fd>1){
-		// search through fd_table
-		struct list_elem *fd_elem;
-		if(!list_empty(&curr->fd_table)){
-			fd_elem=list_begin(&curr->fd_table);
-			while(fd_elem!=list_end(&curr->fd_table)){
-				// struct file_descriptor *fd_entry = list_entry(fd_elem, struct file_descriptor, elem);
-				// if (fd_entry->file==fd){
-				// 	return fd_elem;
-				// }
-				if( list_entry(fd_elem, struct file_descriptor, elem)->fd==fd)
-					return fd_elem;
-			}
+			lock_release(&filesys_lock);
+			return;
 		}
     }
-    return NULL;
+    exit(-1);
 }
 
-int filesize(int fd){
-	struct list_elem *fd_elem =	find_fd_elem(fd);
-	struct file *target_file = list_entry(fd_elem, struct file_descriptor, elem)->file;
-	return file_length(target_file);
 
+int filesize(int fd){  
+	if (fd>1){
+		struct list_elem *fd_elem =	find_fd_elem(fd);
+		if (fd_elem){
+			struct file *target_file = list_entry(fd_elem, struct file_descriptor, elem)->file;
+			return file_length(target_file);
+		} else {
+			return -1;
+		}
+	} else {
+		exit(-1);
+	}
 }
 
+/* read size bytes from the file open as fd into buffer */
 int read (int fd, void *buffer, unsigned size)
 {
-	//is lock implemented in
-/* 파일에 동시 접근이 일어날 수 있으므로 Lock 사용 */
-/* 파일 디스크립터를 이용하여 파일 객체 검색 */
-/* 파일 디스크립터가 0일 경우 키보드에 입력을 버퍼에 저장 후
-버퍼의 저장한 크기를 리턴 (input_getc() 이용) */
-/* 파일 디스크립터가 0이 아닐 경우 파일의 데이터를 크기만큼 저
-장 후 읽은 바이트 수를 리턴 */
+	if (buffer && check_address(buffer)){
+		lock_acquire(&filesys_lock);
+		if (fd==0){ //read input from keyboard -> do I have to implement synchronization??
+			int read_size = 0;
+			char *temp_buf = buffer;
+			for (int i=0; i<size;i++){
+				*temp_buf = input_getc();
+				read_size++;
+				if (*temp_buf == '\0')
+					break;
+				temp_buf++;
+			}
+			lock_release(&filesys_lock);
+			return read_size;
+		} else {
+			struct list_elem *fd_elem =	find_fd_elem(fd);
+			if (fd_elem){
+				struct file *file = list_entry(fd_elem, struct file_descriptor, elem)->file;
+				lock_release(&filesys_lock);
+				return file_read(file, buffer, size);
+			} 
+			lock_release(&filesys_lock);
+			return -1; //failed to read file associated with the given fd
+
+		}
+
+	} else {
+		exit(-1);
+	}
 }
 
-int write(int fd, void *buffer, unsigned size)
+int write (int fd, const void *buffer, unsigned size)
 {
-/* 파일에 동시 접근이 일어날 수 있으므로 Lock 사용 */
-/* 파일 디스크립터를 이용하여 파일 객체 검색 */
-/* 파일 디스크립터가 1일 경우 버퍼에 저장된 값을 화면에 출력
-후 버퍼의 크기 리턴 (putbuf() 이용) */
-/* 파일 디스크립터가 1이 아닐 경우 버퍼에 저장된 데이터를 크기
-만큼 파일에 기록후 기록한 바이트 수를 리턴 */
+	if (buffer && check_address(buffer)){
+		int write_size = 0;
+		lock_acquire(&filesys_lock);
+
+		if(fd==1){ //stdout case -> print to console
+			putbuf(buffer, size);
+			write_size = size;
+		} else {
+			struct list_elem *fd_elem =	find_fd_elem(fd);
+			if (fd_elem){
+				struct file *file = list_entry(fd_elem, struct file_descriptor, elem)->file;
+				write_size = file_write(file, buffer, size);
+			} else {
+				lock_release(&filesys_lock);
+				return -1;
+			}
+		}
+		lock_release(&filesys_lock);
+		return write_size;
+	} else {
+		exit(-1);
+	}
+
 }
 
 
+tid_t fork (const char *thread_name){
+	if (!check_address(thread_name))
+		exit(-1);
+	lock_acquire(&filesys_lock);
+	tid_t  child_tid = process_fork(thread_name, &thread_current()->parent_tf);
+	lock_release(&filesys_lock);
+	if (child_tid ==TID_ERROR){
+		return -1;
+	} else if (child_tid==0){ //child process
+		return 0;
+	} else {
+		return child_tid;
+	}
+}
 
+
+/* waits for child(tid) to exit and retreive the child's exit status. */
+int wait (tid_t child_tid)
+{	
+	int result = process_wait(child_tid);
+
+	if (result<0)
+		return result;
+
+	// search for child thread and sema_down on sema_wait
+	struct list_elem *child = list_begin(&thread_current()->child_list);
+	struct thread *child_t;
+	while (child){
+		child_t = list_entry(child, struct thread, child_elem);
+		if (child_t->tid==child_tid){
+			break;
+		}
+		child = child->next;
+	}
+	// sema_down(&child_t->sema_wait);	
+	return result;
+}
+
+
+int exec (const char *file)
+{
+
+}
+
+void seek (int fd, unsigned position){
+
+}
+
+unsigned tell (int fd){
+
+}
 
 
 
@@ -271,8 +352,7 @@ int write(int fd, void *buffer, unsigned size)
 
 
 /* --- helper functions defined ---*/
-/* check address validity */
-// check if the pointer points below PHYS_BASE ??
+/* check address validity: is in userland? */
 static bool
 check_address(void *addr) {
 	if (is_kernel_vaddr(addr) || pml4_get_page(thread_current()->pml4, addr) == NULL) {
@@ -283,29 +363,22 @@ check_address(void *addr) {
 	return true;
 }
 
-// kernel: 32bit, user: 64bit?
 
-/* pass args in userstack to kernel */
-void get_argument(void *esp, int *arg, int count){
-	//get file name
-	int *user_stack = (int *)esp;
-
-	for (int i=0; i<count; i++){
-		arg[i] = user_stack[i];
-	}
-	//get file size
-
+/* find fd_elem of of an open file associated with the given fd */
+/* returns null if no open file is found */
+struct list_elem* find_fd_elem(int fd)
+{
+	struct thread *curr = thread_current();
+    if (fd>1){
+		// search through fd_table
+		struct list_elem *fd_elem;
+		if(!list_empty(&curr->fd_table)){
+			fd_elem=list_begin(&curr->fd_table);
+			while(fd_elem!=list_end(&curr->fd_table)){
+				if( list_entry(fd_elem, struct file_descriptor, elem)->fd==fd)
+					return fd_elem;
+			}
+		}
+    }
+    return NULL;
 }
-
-
-
-// check the validity of a user-provided pointer
-
-
-
-// a process can hold a lock and ask for malloc -> 그치...똑같은 메모리 동시에 할당하면 안되니까....
-// before terminating process it has to fee resources it is holding
-
-
-// get_user
-// put_user

@@ -12,7 +12,7 @@ Kernel command line: -q -f put rox-simple run rox-simple
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  34,764,800 loops/s.
+Calibrating timer...  52,428,800 loops/s.
 hd0: unexpected interrupt
 hd0:0: detected 329 sector (164 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
@@ -25,15 +25,16 @@ Executing 'rox-simple':
 (rox-simple) begin
 (rox-simple) open "rox-simple"
 (rox-simple) read "rox-simple"
-(rox-simple) read "rox-simple": FAILED
+(rox-simple) try to write "rox-simple"
+(rox-simple) try to write "rox-simple": FAILED
 rox-simple: exit(1)
 Execution of 'rox-simple' complete.
 Timer: 1002 ticks
-Thread: 914 idle ticks, 72 kernel ticks, 17 user ticks
+Thread: 895 idle ticks, 86 kernel ticks, 22 user ticks
 hd0:0: 0 reads, 0 writes
-hd0:1: 88 reads, 268 writes
+hd0:1: 90 reads, 269 writes
 hd1:0: 120 reads, 0 writes
-Console: 987 characters output
+Console: 1034 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off...

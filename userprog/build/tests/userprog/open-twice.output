@@ -12,7 +12,7 @@ Kernel command line: -q -f put open-twice put sample.txt run open-twice
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  48,281,600 loops/s.
+Calibrating timer...  27,801,600 loops/s.
 hd0: unexpected interrupt
 hd0:0: detected 329 sector (164 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
@@ -29,8 +29,8 @@ Executing 'open-twice':
 (open-twice) end
 open-twice: exit(0)
 Execution of 'open-twice' complete.
-Timer: 1004 ticks
-Thread: 922 idle ticks, 65 kernel ticks, 18 user ticks
+Timer: 1005 ticks
+Thread: 907 idle ticks, 77 kernel ticks, 21 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 125 reads, 280 writes
 hd1:0: 121 reads, 0 writes

@@ -12,7 +12,7 @@ Kernel command line: -q -f put create-empty run create-empty
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  35,942,400 loops/s.
+Calibrating timer...  19,840,000 loops/s.
 hd0: unexpected interrupt
 hd0:0: detected 329 sector (164 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
@@ -28,7 +28,7 @@ Executing 'create-empty':
 create-empty: exit(0)
 Execution of 'create-empty' complete.
 Timer: 1005 ticks
-Thread: 923 idle ticks, 69 kernel ticks, 14 user ticks
+Thread: 893 idle ticks, 95 kernel ticks, 19 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 89 reads, 280 writes
 hd1:0: 118 reads, 0 writes

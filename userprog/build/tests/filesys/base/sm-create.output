@@ -5,13 +5,14 @@ iPXE (https://ipxe.org) 00:03.0 CA00 PCI2.10 PnP PMM+0138B4A0+012CB4A0 CA00
 Press Ctrl-B to configure iPXE (PCI 00:03.0)...                                                                               
 
 
-Booting from Hard Disk..Kernel command line: -q -f put sm-create run sm-create
+Booting from Hard Disk...
+Kernel command line: -q -f put sm-create run sm-create
 0 ~ 9fc00 1
 100000 ~ 13e0000 1
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  32,716,800 loops/s.
+Calibrating timer...  35,993,600 loops/s.
 hd0: unexpected interrupt
 hd0:0: detected 329 sector (164 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
@@ -24,16 +25,17 @@ Executing 'sm-create':
 (sm-create) begin
 (sm-create) create "blargle"
 (sm-create) open "blargle" for verification
-(sm-create) size of blargle (8) differs from expected (5678)
-(sm-create) read of 512 bytes at offset 0 in "blargle" returned 9: FAILED
-sm-create: exit(1)
+(sm-create) verified contents of "blargle"
+(sm-create) close "blargle"
+(sm-create) end
+sm-create: exit(0)
 Execution of 'sm-create' complete.
-Timer: 1003 ticks
-Thread: 916 idle ticks, 68 kernel ticks, 21 user ticks
+Timer: 1004 ticks
+Thread: 908 idle ticks, 72 kernel ticks, 27 user ticks
 hd0:0: 0 reads, 0 writes
-hd0:1: 112 reads, 298 writes
+hd0:1: 124 reads, 298 writes
 hd1:0: 123 reads, 0 writes
-Console: 1088 characters output
+Console: 1040 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off...

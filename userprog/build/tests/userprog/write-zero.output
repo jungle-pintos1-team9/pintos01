@@ -12,7 +12,7 @@ Kernel command line: -q -f put write-zero put sample.txt run write-zero
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  45,004,800 loops/s.
+Calibrating timer...  31,078,400 loops/s.
 hd0: unexpected interrupt
 hd0:0: detected 329 sector (164 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
@@ -25,15 +25,15 @@ Putting 'sample.txt' into the file system...
 Executing 'write-zero':
 (write-zero) begin
 (write-zero) open "sample.txt"
-{(write-zero) write() returned 10 instead of 0: FAILED
-write-zero: exit(1)
+(write-zero) end
+write-zero: exit(0)
 Execution of 'write-zero' complete.
 Timer: 1004 ticks
-Thread: 926 idle ticks, 64 kernel ticks, 15 user ticks
+Thread: 915 idle ticks, 73 kernel ticks, 18 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 116 reads, 280 writes
 hd1:0: 121 reads, 0 writes
-Console: 1033 characters output
+Console: 995 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off...

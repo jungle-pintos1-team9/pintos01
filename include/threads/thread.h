@@ -124,27 +124,26 @@ struct thread {
 	struct list_elem donation_elem;	/* thread 구조체 변환용 */
 
 	/* project2: process hierarchy */
-	struct thread *parent; /* pointer to parent process */  //parent process descriptor???
-	struct list child_list; /* pointer to child list */
-	struct list_elem child_elem; /* siblings list elem */
+	// struct thread *parent; 		 	/* pointer to parent process */ 
+	struct list child_list; 			/* child list */
+	struct list_elem child_elem;              /* List element. */
+
+	struct intr_frame parent_tf;    /* Information for switching */
 
 	/* project2: file descriptor table */
-    // struct file_descriptor* fd_table[MAX_FILE]; //array containg file*
     struct list fd_table;
 	int next_fd; //fd to assign
-    // bool fd_available[MAX_FILE]; 
+	int wait_count; //# of wait called
 
-	struct semaphore sema_exit;
-	struct semaphore sema_load;
 	int exit_status; //exit 호출시 종료 status
+	
+	// struct semaphore sema_wait; //signals the caller if it is possible to call wait()
+	struct semaphore sema_load; //wait for loading parent's context
+	struct semaphore sema_exit; //wait for exit is called
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
-
-
-
-
 
 #endif
 #ifdef VM

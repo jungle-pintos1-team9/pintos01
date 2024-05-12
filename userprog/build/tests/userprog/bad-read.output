@@ -5,14 +5,13 @@ iPXE (https://ipxe.org) 00:03.0 CA00 PCI2.10 PnP PMM+0138B4A0+012CB4A0 CA00
 Press Ctrl-B to configure iPXE (PCI 00:03.0)...                                                                               
 
 
-Booting from Hard Disk...
-Kernel command line: -q -f put bad-read run bad-read
+Booting from Hard Disk..Kernel command line: -q -f put bad-read run bad-read
 0 ~ 9fc00 1
 100000 ~ 13e0000 1
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  35,993,600 loops/s.
+Calibrating timer...  29,440,000 loops/s.
 hd0: unexpected interrupt
 hd0:0: detected 329 sector (164 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
@@ -23,23 +22,14 @@ Boot complete.
 Putting 'bad-read' into the file system...
 Executing 'bad-read':
 (bad-read) begin
-Page fault at 0: not present error reading page in user context.
-bad-read: dying due to interrupt 0x0e (#PF Page-Fault Exception).
-Interrupt 0x0e (#PF Page-Fault Exception) at rip=40000d
- cr2=0000000000000000 error=               4
-rax 0000000000000000 rbx 0000000200000000 rcx 0000000000406280 rdx 0000000000406380
-rsp 000000004747ff90 rbp 000000004747ff90 rsi 000000000040628e rdi 000000000040637f
-rip 000000000040000d r8 0000000000000000  r9 0000000000000000 r10 0000000000000000
-r11 0000000000000206 r12 0000000000000000 r13 0000000000000000 r14 0000000000000000
-r15 0000000000000000 rflags 00000212
-es: 001b ds: 001b cs: 0023 ss: 001b
+bad-read: exit(-1)
 Execution of 'bad-read' complete.
-Timer: 1004 ticks
-Thread: 917 idle ticks, 65 kernel ticks, 23 user ticks
+Timer: 1003 ticks
+Thread: 921 idle ticks, 72 kernel ticks, 12 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 85 reads, 264 writes
 hd1:0: 118 reads, 0 writes
-Console: 1494 characters output
+Console: 873 characters output
 Keyboard: 0 keys pressed
-Exception: 1 page faults
+Exception: 0 page faults
 Powering off...

@@ -12,7 +12,7 @@ Kernel command line: -q -f put lg-seq-block run lg-seq-block
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  39,270,400 loops/s.
+Calibrating timer...  26,163,200 loops/s.
 hd0: unexpected interrupt
 hd0:0: detected 329 sector (164 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
@@ -26,16 +26,19 @@ Executing 'lg-seq-block':
 (lg-seq-block) create "noodle"
 (lg-seq-block) open "noodle"
 (lg-seq-block) writing "noodle"
-Þ‰A£7]:ŠgWn’mÇ£ðÌë—E+M2'–_ž¨ÌumŸ¹ÅAz¥Ë0ü"‹4˜-»bžÀKO‹ qP’ ÃXJHä£
-9{ŠÍ(lg-seq-block) write 513 bytes at offset 0 in "noodle" failed: FAILED
-lg-seq-block: exit(1)
+(lg-seq-block) close "noodle"
+(lg-seq-block) open "noodle" for verification
+(lg-seq-block) verified contents of "noodle"
+(lg-seq-block) close "noodle"
+(lg-seq-block) end
+lg-seq-block: exit(0)
 Execution of 'lg-seq-block' complete.
-Timer: 1004 ticks
-Thread: 918 idle ticks, 63 kernel ticks, 24 user ticks
+Timer: 1006 ticks
+Thread: 805 idle ticks, 131 kernel ticks, 72 user ticks
 hd0:0: 0 reads, 0 writes
-hd0:1: 112 reads, 434 writes
+hd0:1: 558 reads, 729 writes
 hd1:0: 123 reads, 0 writes
-Console: 1141 characters output
+Console: 1164 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off...

@@ -12,7 +12,7 @@ Kernel command line: -q -f put multi-oom run multi-oom
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  17,996,800 loops/s.
+Calibrating timer...  35,993,600 loops/s.
 hd0: unexpected interrupt
 hd0:0: detected 329 sector (164 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
@@ -23,16 +23,15 @@ Boot complete.
 Putting 'multi-oom' into the file system...
 Executing 'multi-oom':
 (multi-oom) begin
-(multi-oom) Spawned at least 10 children.
-(multi-oom) Spawned at least 10 children.: FAILED
-multi-oom: exit(1)
-Execution of 'multi-oom' complete.
-Timer: 1003 ticks
-Thread: 899 idle ticks, 90 kernel ticks, 14 user ticks
+Kernel PANIC at ../../threads/mmu.c:242 in pml4_set_page(): assertion `is_kernel_vaddr(kpage)' failed.
+Call stack: 0x8004218df4 0x800420d60b 0x800421c9ec 0x800420cde2 0x800420ce98 0x800420cf41 0x800420cfdd 0x800421cac6 0x8004207a14.
+The `backtrace' program can make call stacks useful.
+Read "Backtraces" in the "Debugging Tools" chapter
+of the Pintos documentation for more information.
+Timer: 138 ticks
+Thread: 66 idle ticks, 60 kernel ticks, 12 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 87 reads, 276 writes
 hd1:0: 124 reads, 0 writes
-Console: 971 characters output
-Keyboard: 0 keys pressed
-Exception: 0 page faults
-Powering off...
+Console: 1210 characters output
+Key
