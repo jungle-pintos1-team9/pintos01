@@ -377,6 +377,7 @@ struct list_elem* find_fd_elem(int fd)
 			while(fd_elem!=list_end(&curr->fd_table)){
 				if( list_entry(fd_elem, struct file_descriptor, elem)->fd==fd)
 					return fd_elem;
+				fd_elem = fd_elem->next;
 			}
 		}
     }

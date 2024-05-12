@@ -82,19 +82,25 @@ initd (void *f_name) {
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
+	struct thread *curr = thread_current();
+
 	tid_t child_tid = thread_create (name,
 			PRI_DEFAULT, __do_fork, thread_current ());
 
 	// search for child and sema down(sema_load)
 	struct list_elem *search_child = list_begin(&thread_current()->child_list);
-	while(search_child){
-		struct thread *child_t = list_entry(search_child, struct thread, child_elem);
+	bool found = false;
+	struct thread *child_t = list_entry(search_child, struct thread, child_elem);
+	while(search_child!=list_end(&thread_current()->child_list)){
 		if (child_t->tid==child_tid){
+			found = true;
 			sema_down(&child_t->sema_load);
 			break;
 		}
 		search_child = search_child->next;
 	}
+	if (!found || child_t->exit_status==TID_ERROR)
+		return TID_ERROR;
 	return child_tid;
 
 }
@@ -184,7 +190,7 @@ __do_fork (void *aux) {
 	// copy fd_table & openfiles of parent
 	if(!list_empty(&parent->fd_table)){
 		struct list_elem *fd_elem = list_begin(&parent->fd_table);
-		while(fd_elem){
+		while(fd_elem!=list_end(&parent->fd_table)){
 			struct file_descriptor *p_fd_entry = list_entry(fd_elem, struct file_descriptor, elem);
 			struct file_descriptor *c_fd_entry = (struct file_descriptor*)malloc(sizeof(struct file_descriptor));
 			c_fd_entry->fd = p_fd_entry->fd;
@@ -201,7 +207,10 @@ __do_fork (void *aux) {
 	if (succ)
 		do_iret (&if_);
 error:
-	thread_exit ();
+	current->exit_status = TID_ERROR;
+	sema_up(&current->sema_load);
+	exit(-1);
+	// thread_exit ();
 }
 
 /* Switch the current execution context to the f_name.
@@ -373,20 +382,11 @@ process_wait (tid_t child_tid) {
 
 	child_t->wait_count++; //increment wait count
 	
-	//if exited deallocate the descriptor of child process
-	// 1. status 확인
-	sema_down(&child_t->sema_exit); // wait for child thread to exit
-	return child_t->exit_status;
+	sema_down(&child_t->sema_exit); 	// wait for child thread to exit
+	list_remove(&child_t->child_elem); 	// once child process exits, deallocate the descriptor of child process
+	int exit_status = child_t->exit_status;
+	return exit_status;		// return exit status of the child process
 
-	// sema_up(&child_t->sema_wait);
-	// once child process exits, deallocate the descriptor of child process
-	// and return exit status of the child process
-
-	// return exit status of the child process
-
-
-	// thread_sleep(1000);
-	// TODO: 자식 프로세스가 종료될 때까지 대기
 }
 
 /* Exit the process. This function is called by thread_exit (). */
